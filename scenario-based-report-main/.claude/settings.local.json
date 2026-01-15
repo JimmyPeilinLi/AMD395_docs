@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lscpu:*)",
+      "Bash(lspci:*)",
+      "Bash(rocm-smi:*)",
+      "Bash(./scripts/generate-pdf.sh:*)",
+      "Bash(ls:*)",
+      "Bash(npx md-to-pdf:*)",
+      "Bash(sudo apt-get install:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "WebSearch"
+    ]
+  }
+}

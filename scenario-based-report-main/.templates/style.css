@@ -1,0 +1,205 @@
+/* 趋境科技 - 技术方案报告样式（紫色主题） */
+
+:root {
+  /* 主色调 - 趋境紫 */
+  --primary: #6c20ef;
+  --primary-dark: #5419b8;
+  --primary-light: #ede9fe;
+  --primary-lighter: #f5f3ff;
+
+  /* 辅助色 */
+  --text-dark: #1f2937;
+  --text-gray: #6b7280;
+  --text-light: #9ca3af;
+  --border: #e5e7eb;
+  --bg-light: #f9fafb;
+}
+
+/* 基础样式 */
+body {
+  font-family: "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.6;
+  color: var(--text-dark);
+  max-width: 100%;
+}
+
+/* 标题样式 */
+h1 {
+  color: var(--primary-dark);
+  font-size: 22pt;
+  font-weight: 700;
+  border-bottom: 3px solid var(--primary);
+  padding-bottom: 10px;
+  margin-top: 30px;
+}
+
+h2 {
+  color: var(--primary-dark);
+  font-size: 16pt;
+  font-weight: 600;
+  border-bottom: 1px solid var(--primary-light);
+  padding-bottom: 6px;
+  margin-top: 25px;
+}
+
+h3 {
+  color: var(--text-dark);
+  font-size: 13pt;
+  font-weight: 600;
+  margin-top: 20px;
+}
+
+h4 {
+  color: var(--text-gray);
+  font-size: 11pt;
+  font-weight: 600;
+}
+
+/* 表格样式 */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+  font-size: 10pt;
+}
+
+th {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--primary);
+}
+
+td {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+}
+
+tr:nth-child(even) {
+  background-color: var(--bg-light);
+}
+
+tr:hover {
+  background-color: var(--primary-lighter);
+}
+
+/* 强调文字 */
+strong {
+  color: var(--primary-dark);
+}
+
+/* 代码块 */
+code {
+  background-color: var(--primary-lighter);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: "SF Mono", "Monaco", "Consolas", "Courier New", monospace;
+  font-size: 9pt;
+  color: var(--primary-dark);
+}
+
+pre {
+  background-color: #1f2937;
+  color: #e5e7eb;
+  padding: 15px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 9pt;
+  line-height: 1.4;
+  font-family: "SF Mono", "Monaco", "Consolas", "Courier New", monospace;
+}
+
+pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-family: inherit;
+}
+
+/* 引用块 - 用于价值主张等重点内容 */
+blockquote {
+  background: linear-gradient(135deg, var(--primary-lighter) 0%, var(--primary-light) 100%);
+  border-left: 4px solid var(--primary);
+  padding: 15px 20px;
+  margin: 20px 0;
+  border-radius: 0 6px 6px 0;
+  font-style: normal;
+}
+
+blockquote strong {
+  color: var(--primary);
+}
+
+/* 列表样式 */
+ul, ol {
+  margin: 10px 0;
+  padding-left: 25px;
+}
+
+li {
+  margin: 5px 0;
+}
+
+/* 分隔线 */
+hr {
+  border: none;
+  border-top: 2px solid var(--border);
+  margin: 30px 0;
+}
+
+/* 链接 */
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* 页面布局 */
+@page {
+  size: A4;
+  margin: 25mm 20mm 25mm 20mm;
+}
+
+/* 首页特殊样式 */
+h1:first-of-type {
+  margin-top: 0;
+  padding-top: 20px;
+}
+
+/* 避免表格跨页断开 */
+table {
+  page-break-inside: avoid;
+}
+
+tr {
+  page-break-inside: avoid;
+}
+
+/* 避免标题与内容分离 */
+h1, h2, h3, h4 {
+  page-break-after: avoid;
+}
+
+/* 图片 */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Logo 容器 */
+.logo-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--primary-light);
+}
+
+.logo-header img {
+  height: 50px;
+}
