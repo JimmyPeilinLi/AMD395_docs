@@ -17,9 +17,37 @@
 - **GPU**: AMD Radeon 8060S (gfx1151)
 - **Compute Units**: 40 CUs
 - **Max Clock**: 2900 MHz
-- **Memory**: 33.52 GB (unified LPDDR5X)
+- **Memory**: 统一内存架构 (详见下方)
 - **Device Nodes**: `/dev/dri/card0`, `/dev/dri/renderD128`
 - **Status**: ✅ **Fully functional**
+
+### 2.1 **统一内存架构 (UMA)**
+
+AMD Ryzen AI MAX+ 395 使用统一内存，CPU/GPU/NPU 共享 128GB LPDDR5X：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              128GB LPDDR5X 统一物理内存                   │
+├─────────────────────────────────────────────────────────┤
+│   ┌─────────────────┐  ┌─────────────────────────────┐  │
+│   │   GPU VRAM      │  │      系统内存               │  │
+│   │   (iGPU 专用)    │  │   (CPU + NPU 共享)         │  │
+│   │   默认: 64GB    │  │   默认: ~62GB              │  │
+│   │   最大: 96GB    │  │   最小: ~32GB              │  │
+│   │   ┌───────────┐ │  │  ┌───────┐  ┌───────────┐  │  │
+│   │   │ Radeon    │ │  │  │ Zen 5 │  │ XDNA 2    │  │  │
+│   │   │ 8060S     │ │  │  │ CPU   │  │ NPU       │  │  │
+│   │   └───────────┘ │  │  └───────┘  └───────────┘  │  │
+│   └─────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+| 配置 | GPU VRAM | 系统内存 | 适用场景 |
+|------|----------|---------|---------|
+| 默认 | 64 GB | ~62 GB | 日常使用 |
+| **推荐** | **96 GB** | ~32 GB | 大模型推理 |
+
+详见 [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md)
 
 ### 3. **ROCm 7.9 (Technology Preview)**
 - **Version**: 7.9.0rc1
@@ -67,9 +95,18 @@ source ~/.bashrc
 ```
 
 ### GRUB Boot Parameters (/etc/default/grub)
+
+**当前配置**:
 ```bash
 GRUB_CMDLINE_LINUX_DEFAULT="quiet splash amdgpu.dpm=1 amdgpu.ppfeaturemask=0xffffffff"
 ```
+
+**关于 VRAM 扩展**:
+- Vulkan 后端已经可以访问 ~95GB GPU 内存 (64GB VRAM + 31GB GTT)
+- `amdttm` 参数对消费级 Strix Halo 无效 (仅适用于 Instinct 专业卡)
+- 要获得完整 96GB VRAM，需升级内核到 6.16.9+
+
+修改后执行 `sudo update-grub && sudo reboot`
 
 ---
 
@@ -204,21 +241,27 @@ llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml
 
 ## 📊 Performance Expectations
 
-### What You Can Run
+### 模型内存需求
 
-| Model Size | Status | Performance |
-|------------|--------|-------------|
-| **1-3B params** | ✅ Excellent | >20 tokens/sec (inference) |
-| **7-13B params** | ✅ Good | >5 tokens/sec (inference) |
-| **30B+ params** | ⚠️ Possible | Slow, uses unified memory |
-| **LoRA Fine-tuning (7B)** | ✅ Recommended | Efficient with 33GB memory |
-| **Full Fine-tuning (7B)** | ⚠️ Possible | Memory intensive |
+| 模型 | 大小 | 64GB VRAM | 96GB VRAM |
+|------|------|-----------|-----------|
+| Qwen3-30B Q4_K_M | 17 GB | ✅ 充裕 | ✅ 充裕 |
+| Qwen3-30B Q8_0 | ~32 GB | ✅ 可行 | ✅ 充裕 |
+| Qwen3-30B BF16 | 60 GB | ⚠️ 紧张 | ✅ 可行 |
+| 70B Q4_K_M | ~40 GB | ⚠️ 紧张 | ✅ 可行 |
+
+### llama.cpp 性能测试 (Qwen3-30B Q4_K_M)
+
+| 指标 | GPU (Vulkan) | CPU (32线程) | GPU/CPU |
+|------|--------------|--------------|---------|
+| Prefill 平均 | 770 t/s | 364 t/s | 2.1x |
+| Decode 平均 | 86 t/s | 10 t/s | 8.4x |
 
 ### Hardware Advantages
-- **128GB Unified Memory**: Can load very large models
+- **128GB Unified Memory**: 可配置 64-96GB 给 GPU
 - **40 CUs**: Good parallel compute capacity
-- **Low Power**: More efficient than discrete GPUs
-- **No PCIe Bottleneck**: Direct memory access
+- **256 GB/s 带宽**: 比独显 PCIe 传输更高效
+- **零拷贝**: CPU/GPU 直接共享内存，无需数据传输
 
 ---
 
@@ -365,6 +408,9 @@ Your AMD Ryzen AI MAX+ 395 system is now fully configured for AI/ML workloads wi
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-01-12
+**Document Version**: 1.1
+**Last Updated**: 2026-01-15
 **Status**: ✅ INSTALLATION SUCCESSFUL
+
+**更新记录**:
+- 2026-01-15: 添加统一内存架构说明、VRAM 配置方法、llama.cpp 性能测试结果

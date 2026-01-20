@@ -80,12 +80,76 @@ file model.gguf
 **症状：**
 ```
 ggml_vulkan: not enough memory
+或
+Not enough memory for command submission
 ```
 
 **解决方案：**
-1. 使用更小的量化版本 (Q4_0 instead of Q8_0)
+1. 使用更小的量化版本 (Q4_K_M instead of BF16)
 2. 减少上下文长度 (`-c 2048` instead of `-c 8192`)
 3. 部分层放在 CPU (`-ngl 20` instead of `-ngl 99`)
+4. **扩展 GPU VRAM 分配** (见 Q6.1)
+
+### Q6.1: 如何增加 GPU VRAM？
+
+当前 Vulkan 可访问内存约 **95GB** (64GB VRAM + 31GB GTT)。
+
+**查看实际可用内存:**
+```bash
+vulkaninfo 2>/dev/null | grep -A5 "memoryHeaps"
+# Device Local (VRAM): ~63 GB
+# Host Visible (GTT): ~31 GB
+# 总计: ~95 GB
+```
+
+**要获得完整 96GB VRAM 显示:**
+1. **升级内核到 6.16.9+** (推荐) - 无需任何参数
+2. 或在 BIOS 中调整 UMA/VRAM 设置
+
+**注意:** `amdttm` 参数是给 AMD Instinct 专业卡用的，对消费级 Strix Halo **无效**。
+
+详见 [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md)
+
+### Q6.2: 为什么系统内存只显示 62GB？
+
+这是正常的。AMD APU 使用统一内存架构：
+
+```
+128GB 物理内存 = GPU VRAM (64GB) + 系统可用 (62GB) + 系统保留 (~2GB)
+```
+
+GPU VRAM 从系统内存中预留，所以系统可用会相应减少。
+
+### Q6.3: CPU 和 GPU 的内存可以互相访问吗？
+
+是的，这是 UMA 的优势：
+- GPU 可以**读取**整个 128GB 内存
+- GPU 只能**写入**其预留的 VRAM 部分
+- 没有 PCIe 传输开销
+
+### Q6.4: 内存分配需要重启吗？
+
+| 操作 | 是否需要重启 |
+|------|-------------|
+| 修改 VRAM/系统内存比例 (BIOS) | ✅ 需要 |
+| 升级内核版本 | ✅ 需要 |
+| GPU/CPU 使用已分配内存 | ❌ 动态 |
+
+### Q6.5: NPU 能用多少内存？
+
+NPU (XDNA 2) 从系统内存动态分配，通常只需几 GB。但需要 kernel 6.14+ 才能加载 amdxdna 驱动。llama.cpp 不支持 NPU。
+
+### Q6.6: 哪个内核版本最适合 Strix Halo？
+
+| 内核版本 | GPU (Vulkan) | GPU (ROCm) | NPU | 稳定性 |
+|---------|--------------|------------|-----|--------|
+| **6.11 (当前)** | ~95GB ✅ | ~15GB ⚠️ | ❌ | ✅ 稳定 |
+| 6.14 | ~95GB | ~15GB ⚠️ | ✅ | ✅ 稳定 |
+| 6.16.9+ | 96GB ✅ | 96GB ✅ | ✅ | ⚠️ 部分问题 |
+| 6.17.9 | ? | ? | ? | ❌ 有崩溃 |
+| 6.18+ | ? | ❌ | ? | ❌ 破坏 ROCm |
+
+**推荐**: llama.cpp 用户保持 6.11；需要 ROCm 完整内存则升级到 6.16.9。
 
 ## 性能相关
 

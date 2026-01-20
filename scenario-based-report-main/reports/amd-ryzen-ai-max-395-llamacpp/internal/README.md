@@ -1,7 +1,7 @@
 # AMD Ryzen AI MAX+ 395 平台 llama.cpp 部署技术方案
 
-**版本**: 内部版 v1.1
-**日期**: 2026-01-14
+**版本**: 内部版 v1.2
+**日期**: 2026-01-15
 **平台**: AMD Ryzen AI MAX+ 395 (Strix Halo)
 
 ---
@@ -562,6 +562,27 @@ print(response.choices[0].message.content)
 
 ### 5.2 GPU vs CPU 性能对比 (实测数据)
 
+**测试命令**:
+
+```bash
+# GPU 测试 (Vulkan 后端, 所有层放到 GPU)
+~/llama.cpp/build/bin/llama-bench \
+    -m ~/data/models/Qwen3-30B-A3B-Q4_K_M.gguf \
+    -ngl 99 \
+    -p 128,512,1024,2048,4096 \
+    -n 128,256,512 \
+    -r 2
+
+# CPU 测试 (32 线程)
+~/llama.cpp/build/bin/llama-bench \
+    -m ~/data/models/Qwen3-30B-A3B-Q4_K_M.gguf \
+    -ngl 0 \
+    -t 32 \
+    -p 128,512,1024,2048,4096 \
+    -n 128,256,512 \
+    -r 2
+```
+
 #### 5.2.1 Prefill 性能 (Prompt Processing)
 
 | Prompt 长度 | GPU Vulkan (t/s) | CPU 32线程 (t/s) | GPU/CPU 加速比 |
@@ -739,7 +760,108 @@ Decode 性能 (tokens/s)
 
 **结论**: Strix Halo + Vulkan 后端的性能接近 Apple M4 Max，在消费级 APU 中表现优异。
 
-### 5.6 Vulkan 驱动选择
+### 5.6 Q4_K_M vs F16 量化对比 (2026-01-15 新增)
+
+除了量化模型 Q4_K_M，我们还测试了 F16 全精度模型以对比性能差异。
+
+**测试模型**:
+| 模型 | 量化格式 | 大小 | 精度 |
+|------|----------|------|------|
+| Qwen3-30B-A3B | Q4_K_M | 17.28 GB | 4-bit 量化 |
+| Qwen3-30B-A3B | F16 | 56.89 GB | 16-bit 浮点 |
+
+**注意**: 原始 BF16 模型 Vulkan 不支持 (`bf16: 0`)，需转换为 F16 格式。
+
+**测试命令**:
+
+```bash
+# Q4_K_M 测试
+~/llama.cpp/build/bin/llama-bench \
+    -m ~/data/models/Qwen3-30B-A3B-Q4_K_M.gguf \
+    -ngl 99 \
+    -p 128,512,1024,2048 \
+    -n 128,256 \
+    -r 2 \
+    -o csv
+
+# F16 测试
+~/llama.cpp/build/bin/llama-bench \
+    -m ~/data/models/Qwen3-30B-A3B-F16.gguf \
+    -ngl 99 \
+    -p 128,512,1024,2048 \
+    -n 128,256 \
+    -r 2 \
+    -o csv
+```
+
+#### 5.6.1 Prefill 速度对比 (tokens/s)
+
+| Prompt 长度 | Q4_K_M | F16 | Q4_K_M/F16 加速比 |
+|-------------|--------|-----|-------------------|
+| 128 tokens | **498** | 269 | 1.85x |
+| 512 tokens | **1004** | 640 | 1.57x |
+| 1024 tokens | **906** | 613 | 1.48x |
+| 2048 tokens | **811** | 589 | 1.38x |
+
+#### 5.6.2 Decode 速度对比 (tokens/s)
+
+| 生成长度 | Q4_K_M | F16 | Q4_K_M/F16 加速比 |
+|----------|--------|-----|-------------------|
+| 128 tokens | **86.0** | 21.9 | **3.93x** |
+| 256 tokens | **85.8** | 21.9 | **3.92x** |
+
+#### 5.6.3 性能分析
+
+```
+Decode 速度对比 (tokens/s)
+
+Q4_K_M ████████████████████████████████████████████ 86 t/s
+F16    ███████████ 22 t/s
+
+                    ~4x 差距
+```
+
+**关键发现**:
+
+1. **Q4_K_M 在所有场景下都更快**
+   - Prefill: 1.4x - 1.9x 更快
+   - Decode: **~4x 更快** (最显著差异)
+
+2. **内存效率**
+   - Q4_K_M: 17GB (可在 64GB VRAM 中轻松运行)
+   - F16: 57GB (接近 64GB VRAM 上限)
+
+3. **精度 vs 速度权衡**
+   - F16 保留完整精度，适合对准确性要求高的场景
+   - Q4_K_M 速度优势明显，**推荐日常使用**
+
+#### 5.6.4 适用场景推荐
+
+| 场景 | 推荐模型 | 原因 |
+|------|----------|------|
+| **日常对话** | Q4_K_M | 速度快，响应及时 |
+| **批量处理** | Q4_K_M | 吞吐量高 |
+| **代码生成** | Q4_K_M | 通常足够准确 |
+| **学术研究** | F16 | 需要最高精度 |
+| **模型评估** | F16 | 避免量化误差 |
+
+#### 5.6.5 BF16 转 F16 方法
+
+```bash
+# BF16 -> F16 转换
+~/llama.cpp/build/bin/llama-quantize \
+    model-bf16.gguf \
+    model-f16.gguf \
+    F16
+
+# BF16 -> Q4_K_M 量化 (更小更快)
+~/llama.cpp/build/bin/llama-quantize \
+    model-bf16.gguf \
+    model-q4km.gguf \
+    Q4_K_M
+```
+
+### 5.7 Vulkan 驱动选择
 
 AMD GPU 有两种 Vulkan 驱动可选：
 
@@ -750,15 +872,15 @@ AMD GPU 有两种 Vulkan 驱动可选：
 
 当前系统使用 **RADV** 驱动 (Mesa 25.0.7)。
 
-### 5.7 优化建议
+### 5.8 优化建议
 
-#### 5.4.1 量化格式选择
+#### 5.8.1 量化格式选择
 
 对于 gfx1151，推荐 **Q4_K_M** 或 **Q5_K_M**：
 - 平衡性能和质量
 - 适合统一内存带宽
 
-#### 5.4.2 上下文长度调整
+#### 5.8.2 上下文长度调整
 
 ```bash
 # 默认 512 (适合简单问答)
@@ -771,13 +893,13 @@ llama-cli -m model.gguf -ngl 99 -c 4096
 llama-cli -m model.gguf -ngl 99 -c 8192
 ```
 
-#### 5.4.3 批处理大小 (服务器场景)
+#### 5.8.3 批处理大小 (服务器场景)
 
 ```bash
 llama-server -m model.gguf -ngl 99 -c 4096 --batch-size 512 --parallel 4
 ```
 
-#### 5.4.4 GPU 监控
+#### 5.8.4 GPU 监控
 
 ```bash
 # 实时监控 GPU 状态
@@ -787,7 +909,7 @@ watch -n 2 amd-smi
 watch -n 2 'amd-smi | grep "Mem-Usage"'
 ```
 
-### 5.5 与其他方案对比
+### 5.9 与其他方案对比
 
 | 方案 | 支持状态 | 性能 | 推荐度 |
 |------|----------|------|--------|
@@ -1004,8 +1126,10 @@ cd ~/lpl_docs/llamacpp_amd/benchmark
 
 | 文件 | 路径 |
 |------|------|
-| GPU 测试结果 | `benchmark/results/benchmark_gpu_20260113_102207.csv` |
-| CPU 测试结果 | `benchmark/results/benchmark_cpu_20260113_103426.csv` |
+| GPU 测试结果 (Q4_K_M) | `benchmark/results/benchmark_gpu_20260113_102207.csv` |
+| CPU 测试结果 (Q4_K_M) | `benchmark/results/benchmark_cpu_20260113_103426.csv` |
+| Q4_K_M 对比测试 | `benchmark/results/q4km_20260115_090831.csv` |
+| F16 对比测试 | `benchmark/results/f16_20260115_090831.csv` |
 | 分析报告 | `benchmark/analysis.md` |
 
 ### 7.6 测试环境配置清单
@@ -1037,6 +1161,6 @@ $ cat /opt/rocm/.info/version
 
 ---
 
-**文档版本**: 1.1 (内部版)
-**最后更新**: 2026-01-14
+**文档版本**: 1.2 (内部版)
+**最后更新**: 2026-01-15
 **状态**: 已完成
